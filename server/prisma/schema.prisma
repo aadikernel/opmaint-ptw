@@ -1,0 +1,191 @@
+// Permit to Work (PTW) schema.
+// Common permit fields live on Permit. Type-specific fields live in Permit.typeSpecificData (JSONB)
+// and are validated server-side by a Zod schema chosen from Permit.permitType.
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  REQUESTER
+  AREA_OWNER
+  SAFETY_OFFICER
+  ADMIN
+}
+
+enum PermitType {
+  HOT_WORK
+  CONFINED_SPACE
+  WORKING_AT_HEIGHT
+  ELECTRICAL_LOTO
+}
+
+enum PermitStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  REJECTED
+  CLOSED
+  CLOSED_VERIFIED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WorkLogKind {
+  NOTE
+  ENTRY
+  EXIT
+}
+
+model Plant {
+  id    String @id @default(uuid())
+  name  String @unique
+  code  String @unique
+  areas Area[]
+}
+
+model Area {
+  id        String      @id @default(uuid())
+  name      String
+  plantId   String
+  plant     Plant       @relation(fields: [plantId], references: [id])
+  equipment Equipment[]
+  users     User[]
+
+  @@unique([plantId, name])
+}
+
+model Equipment {
+  id      String   @id @default(uuid())
+  tag     String   @unique
+  name    String
+  areaId  String
+  area    Area     @relation(fields: [areaId], references: [id])
+  permits Permit[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  areaId       String?
+  area         Area?    @relation(fields: [areaId], references: [id])
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  permits   Permit[]         @relation("Requester")
+  approvals PermitApproval[]
+  auditLogs AuditLog[]
+  workLogs  WorkLog[]
+  closures  ClosureVerification[]
+}
+
+model Permit {
+  id                    String       @id @default(uuid())
+  number                Int          @unique @default(autoincrement())
+  permitType            PermitType
+  status                PermitStatus @default(DRAFT)
+  requesterId           String
+  requester             User         @relation("Requester", fields: [requesterId], references: [id])
+  contractor            String       @default("")
+  workDescription       String       @default("")
+  equipmentId           String?
+  equipment             Equipment?   @relation(fields: [equipmentId], references: [id])
+  plannedStart          DateTime?
+  plannedEnd            DateTime?
+  hazards               String[]     @default([])
+  ppe                   String[]     @default([])
+  precautions           Json         @default("[]")
+  requiredApprovalRoles Role[]       @default([])
+  typeSpecificData      Json         @default("{}")
+  submittedAt           DateTime?
+  activatedAt           DateTime?
+  closedAt              DateTime?
+  completionNotes       String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  approvals PermitApproval[]
+  auditLogs AuditLog[]
+  workLogs  WorkLog[]
+  closure   ClosureVerification?
+
+  @@index([status])
+  @@index([plannedEnd])
+  @@index([equipmentId])
+}
+
+model PermitApproval {
+  id           String         @id @default(uuid())
+  permitId     String
+  permit       Permit         @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  requiredRole Role
+  approverId   String?
+  approver     User?          @relation(fields: [approverId], references: [id])
+  status       ApprovalStatus @default(PENDING)
+  comment      String?
+  decidedAt    DateTime?
+
+  @@unique([permitId, requiredRole])
+}
+
+// Append-only. A database trigger (see migration 2) blocks UPDATE and DELETE.
+model AuditLog {
+  id         String        @id @default(uuid())
+  permitId   String
+  permit     Permit        @relation(fields: [permitId], references: [id], onDelete: Restrict)
+  actorId    String?
+  actor      User?         @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorName  String
+  action     String
+  fromStatus PermitStatus?
+  toStatus   PermitStatus?
+  changes    Json?
+  comment    String?
+  createdAt  DateTime      @default(now())
+
+  @@index([permitId, createdAt])
+}
+
+model WorkLog {
+  id         String      @id @default(uuid())
+  permitId   String
+  permit     Permit      @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  kind       WorkLogKind @default(NOTE)
+  personName String?
+  note       String
+  loggedAt   DateTime    @default(now())
+
+  @@index([permitId])
+}
+
+model ClosureVerification {
+  id           String   @id @default(uuid())
+  permitId     String   @unique
+  permit       Permit   @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  verifierId   String
+  verifier     User     @relation(fields: [verifierId], references: [id])
+  areaClean    Boolean
+  workComplete Boolean
+  comment      String?
+  verifiedAt   DateTime @default(now())
+}

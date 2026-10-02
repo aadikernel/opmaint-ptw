@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Barlow", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --color-ink: #14181c;
+  --color-steel: #e6e9ec;
+  --color-panel: #ffffff;
+  --color-line: #c3c9cf;
+  --color-muted: #5b6670;
+  --color-hazard: #f5c400;
+  --color-go: #1b7f46;
+  --color-warn: #b45f00;
+  --color-stop: #c0262d;
+  --color-info: #1f5fa8;
+}
+
+html, body, #root { min-height: 100%; }
+body { background: var(--color-steel); color: var(--color-ink); font-family: var(--font-sans); font-size: 16px; }
+h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: 0.01em; }
+
+/* Diagonal safety stripe used under the top bar and on warnings */
+.hazard-stripe {
+  background-image: repeating-linear-gradient(-45deg, var(--color-hazard) 0 10px, var(--color-ink) 10px 20px);
+}
+
+:focus-visible { outline: 3px solid var(--color-info); outline-offset: 2px; }
+button, a, input, select, textarea { touch-action: manipulation; }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
